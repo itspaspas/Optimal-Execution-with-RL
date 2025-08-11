@@ -31,14 +31,15 @@ def ar_l_price(prev_impacted_price: float,
     return prev_impacted_price * np.exp(0.0001 * new_return)
 
 
-import numpy as np
-
 def gbm_price(prev_price: float,
               dt: float,
               sigma: float,
-              mu: float
+              mu: float,
+              rng=None
              ) -> float:
-    dw = np.random.normal(loc=0.0, scale=np.sqrt(dt) * sigma)
+    if rng is None:
+        rng = np.random
+    dw = rng.normal(loc=0.0, scale=np.sqrt(dt) * sigma)
 
     drift = (mu - 0.5 * sigma**2) * dt
     log_ret = drift + dw

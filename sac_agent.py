@@ -13,7 +13,7 @@ BUFFER_SIZE = int(1e5)  # replay buffer size
 BATCH_SIZE = 256        # minibatch size
 GAMMA = 0.99            # discount factor
 TAU = 5e-3              # for soft update of target parameters
-LR_ACTOR = 3e-4         # learning rate of the actor 
+LR_ACTOR = 3e-4         # learning rate of the actor
 LR_CRITIC = 3e-4        # learning rate of the critic
 LR_ALPHA = 3e-4         # learning rate for entropy temperature
 WEIGHT_DECAY = 0        # L2 weight decay
@@ -103,7 +103,15 @@ class GaussianPolicy(nn.Module):
 class SACAgent:
     """SAC Agent that interacts with and learns from the environment."""
     
-    def __init__(self, state_size, action_size, random_seed, automatic_entropy_tuning=True):
+    def __init__(self, state_size, action_size, random_seed, automatic_entropy_tuning=True,
+                 buffer_size=BUFFER_SIZE,
+                 batch_size=BATCH_SIZE,
+                 gamma=GAMMA,
+                 tau=TAU,
+                 lr_actor=LR_ACTOR,
+                 lr_critic=LR_CRITIC,
+                 lr_alpha=LR_ALPHA,
+                 weight_decay=WEIGHT_DECAY):
         """Initialize an SAC Agent object.
         
         Params
@@ -117,17 +125,21 @@ class SACAgent:
         self.action_size = action_size
         self.seed = random.seed(random_seed)
 
+        self.gamma = gamma
+        self.tau = tau
+        self.batch_size = batch_size
+
         # Actor Network (Gaussian Policy)
         self.actor = GaussianPolicy(state_size, action_size, random_seed).to(device)
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=LR_ACTOR)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=lr_actor)
 
         # Critic Networks (Twin Critics)
         self.critic1 = SACCritic(state_size, action_size, random_seed).to(device)
         self.critic2 = SACCritic(state_size, action_size, random_seed).to(device)
         self.critic1_target = SACCritic(state_size, action_size, random_seed).to(device)
         self.critic2_target = SACCritic(state_size, action_size, random_seed).to(device)
-        self.critic1_optimizer = optim.Adam(self.critic1.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
-        self.critic2_optimizer = optim.Adam(self.critic2.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
+        self.critic1_optimizer = optim.Adam(self.critic1.parameters(), lr=lr_critic, weight_decay=weight_decay)
+        self.critic2_optimizer = optim.Adam(self.critic2.parameters(), lr=lr_critic, weight_decay=weight_decay)
 
         # Sync target networks
         self.critic1_target.load_state_dict(self.critic1.state_dict())
@@ -138,12 +150,12 @@ class SACAgent:
         if self.automatic_entropy_tuning:
             self.target_entropy = -float(action_size)
             self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
-            self.alpha_optimizer = optim.Adam([self.log_alpha], lr=LR_ALPHA)
+            self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr_alpha)
         else:
             self.alpha = 0.2
 
         # Replay memory
-        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
+        self.memory = ReplayBuffer(action_size, buffer_size, batch_size, random_seed)
     
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -151,9 +163,9 @@ class SACAgent:
         self.memory.add(state, action, reward, next_state, done)
 
         # Learn, if enough samples are available in memory
-        if len(self.memory) > BATCH_SIZE:
+        if len(self.memory) > self.batch_size:
             experiences = self.memory.sample()
-            self.learn(experiences, GAMMA)
+            self.learn(experiences, self.gamma)
 
     def act(self, state, add_noise=True):
         """Returns actions for given state as per current policy."""
@@ -231,8 +243,8 @@ class SACAgent:
             self.alpha_optimizer.step()
 
         # ----------------------- update target networks ----------------------- #
-        self.soft_update(self.critic1, self.critic1_target, TAU)
-        self.soft_update(self.critic2, self.critic2_target, TAU)
+        self.soft_update(self.critic1, self.critic1_target, self.tau)
+        self.soft_update(self.critic2, self.critic2_target, self.tau)
 
 
 
@@ -285,3 +297,4 @@ class ReplayBuffer:
     def __len__(self):
         """Return the current size of internal memory."""
         return len(self.memory)
+

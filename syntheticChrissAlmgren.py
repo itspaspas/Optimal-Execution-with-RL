@@ -45,6 +45,7 @@ class MarketEnvironment():
         
         # Set the random seed
         random.seed(randomSeed)
+        self.rng = np.random.RandomState(randomSeed)
         self.price_model = price_model
         self.reward_function = reward_function
         self.action_strategy: ActionStrategy = action_registry[action_type]
@@ -190,7 +191,8 @@ class MarketEnvironment():
                     prev_price=self.prevImpactedPrice,
                     dt=self.dt,
                     sigma=self.sigma,
-                    mu=self.mu
+                    mu=self.mu,
+                    rng=self.rng
                 )
                 self.prevImpactedPrice = info.price
 

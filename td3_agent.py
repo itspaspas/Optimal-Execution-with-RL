@@ -85,32 +85,43 @@ class ReplayBuffer:
         return len(self.memory)
 
 class TD3():
-    def __init__(self, state_size, action_size, random_seed):
-                self.state_size = state_size
-                self.action_size = action_size
-                self.seed = random.seed(random_seed)
+    def __init__(self, state_size, action_size, random_seed,
+                 buffer_size=BUFFER_SIZE,
+                 batch_size=BATCH_SIZE,
+                 gamma=GAMMA,
+                 tau=TAU,
+                 lr_actor=LR_ACTOR,
+                 lr_critic=LR_CRITIC,
+                 weight_decay=WEIGHT_DECAY,
+                 noise_decay=NOISE_DECAY):
+        self.state_size = state_size
+        self.action_size = action_size
+        self.seed = random.seed(random_seed)
 
-                self.noise = OUNoise(action_size, random_seed)
-                self.noise_decay = NOISE_DECAY
-                
-                self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
-                
+        self.gamma = gamma
+        self.tau = tau
+        self.batch_size = batch_size
 
+        self.noise = OUNoise(action_size, random_seed)
+        self.noise_decay = noise_decay
+        self.noise_decay_rate = noise_decay
 
-                # Actor Networks (local online net + target net)
-                self.actor_local = Actor(state_size, action_size, random_seed).to(device)
-                self.actor_target = Actor(state_size, action_size, random_seed).to(device)
-                self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr = LR_ACTOR)
+        self.memory = ReplayBuffer(action_size, buffer_size, batch_size, random_seed)
 
-                # Critic Networks (local online net + target net)
-                self.critic_local = Critic(state_size, action_size, random_seed).to(device)
-                self.critic_target = Critic(state_size, action_size, random_seed).to(device)
-                self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
-                
-                self.soft_update(self.actor_local, self.actor_target, 1)
-                self.soft_update(self.critic_local, self.critic_target, 1)
-                
-                self.learn_counter = 0
+        # Actor Networks (local online net + target net)
+        self.actor_local = Actor(state_size, action_size, random_seed).to(device)
+        self.actor_target = Actor(state_size, action_size, random_seed).to(device)
+        self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=lr_actor)
+
+        # Critic Networks (local online net + target net)
+        self.critic_local = Critic(state_size, action_size, random_seed).to(device)
+        self.critic_target = Critic(state_size, action_size, random_seed).to(device)
+        self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=lr_critic, weight_decay=weight_decay)
+
+        self.soft_update(self.actor_local, self.actor_target, 1)
+        self.soft_update(self.critic_local, self.critic_target, 1)
+
+        self.learn_counter = 0
                 
                 
     def act(self, state, add_noise=True):
@@ -122,7 +133,7 @@ class TD3():
         self.actor_local.train()
         if add_noise:
             action += self.noise.sample() * self.noise_decay
-            self.noise_decay *= self.noise_decay
+            self.noise_decay *= self.noise_decay_rate
         return np.clip(action, -1, 1)
 
     def reset(self):
@@ -160,8 +171,8 @@ class TD3():
                 actor_loss.backward()
                 self.actor_optimizer.step()
 
-                self.soft_update(self.actor_local, self.actor_target, TAU)
-                self.soft_update(self.critic_local, self.critic_target, TAU)
+                self.soft_update(self.actor_local, self.actor_target, self.tau)
+                self.soft_update(self.critic_local, self.critic_target, self.tau)
 
 
     def soft_update(self, local_model, target_model, tau):
@@ -170,6 +181,7 @@ class TD3():
 
     def step(self, state, action, reward, next_state, done):
         self.memory.add(state, action, reward, next_state, done)
-        if len(self.memory) > BATCH_SIZE:
+        if len(self.memory) > self.batch_size:
             experiences = self.memory.sample()
-            self.learn(experiences, GAMMA)
+            self.learn(experiences, self.gamma)
+
